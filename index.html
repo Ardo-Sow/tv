@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monde en direct – Télévision du monde entier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+<style>
+:root{
+  --paper:#eef1f5; --ink:#14213d; --muted:#5b667a; --line:#d3d9e2; --card:#ffffff; --live:#d0021b;
+  --bars:linear-gradient(90deg,#c0c0c0 0 14.28%,#c0c000 0 28.57%,#00c0c0 0 42.85%,#00c000 0 57.14%,#c000c0 0 71.42%,#c00000 0 85.71%,#0000c0 0);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1.45}
+.strip{height:8px;background:var(--bars)}
+header{max-width:1200px;margin:0 auto;padding:20px 16px 8px}
+h1{margin:0;font-size:clamp(28px,5vw,46px);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+header p{margin:6px 0 0;color:var(--muted);max-width:60ch}
+main{max-width:1200px;margin:0 auto;padding:12px 16px 40px;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:20px;align-items:start}
+.player{position:sticky;top:12px}
+.stage{position:relative;aspect-ratio:16/9;background:var(--bars);border-radius:10px;overflow:hidden}
+.stage video{position:absolute;inset:0;width:100%;height:100%;background:#000;display:none}
+.stage.on video{display:block}
+.idle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:4px;font-weight:600;text-align:center}
+.stage.on .idle{display:none}
+.now{display:flex;align-items:center;gap:10px;margin-top:10px;min-height:28px}
+.now strong{font-size:18px}
+#status{font-size:14px;color:var(--muted)}
+#status.live{color:var(--live);font-weight:600}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.controls .wide{grid-column:1/-1}
+select,input,button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0;width:100%}
+button{cursor:pointer;font-weight:600}
+button[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+:focus-visible{outline:3px solid #0000c0;outline-offset:2px}
+#list{list-style:none;margin:0;padding:0;max-height:68vh;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+#list li{display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line)}
+#list li:last-child{border-bottom:0}
+#list li.active{background:#e6ebf5}
+.ch{flex:1;display:flex;align-items:center;gap:12px;text-align:left;border:0;border-radius:0;background:transparent;padding:10px 12px;font-weight:400}
+.ch img,.ch .ph{width:44px;height:32px;object-fit:contain;flex:none;background:#f3f5f8;border-radius:4px}
+.ch .ph{display:grid;place-items:center;font-weight:800;color:var(--muted)}
+.ch span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch small{display:block;color:var(--muted);font-size:12px}
+.fav{width:44px;flex:none;border:0;background:transparent;font-size:20px;padding:8px;color:var(--muted)}
+.fav[aria-pressed=true]{color:#c08a00}
+.note{padding:16px;color:var(--muted);margin:0}
+.more{margin:10px 0 0}
+footer{max-width:1200px;margin:0 auto;padding:0 16px 30px;color:var(--muted);font-size:13px}
+@media(max-width:820px){
+  main{grid-template-columns:1fr}
+  .player{top:0;z-index:5;background:var(--paper);padding-bottom:6px}
+  #list{max-height:none}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="strip"></div>
+<header>
+  <h1>Monde en direct</h1>
+  <p>Des milliers de chaînes de télévision en accès libre. Choisis un pays ou une catégorie, puis touche une chaîne pour la regarder.</p>
+</header>
+
+<main>
+  <section class="player" aria-label="Lecteur">
+    <div class="stage" id="stage">
+      <video id="v" controls playsinline></video>
+      <div class="idle">Choisis une chaîne dans la liste</div>
+    </div>
+    <div class="now"><strong id="title">&nbsp;</strong><span id="status"></span></div>
+  </section>
+
+  <section aria-label="Chaînes">
+    <div class="controls">
+      <select id="country" aria-label="Pays"></select>
+      <select id="cat" aria-label="Catégorie"></select>
+      <input id="q" class="wide" type="search" placeholder="Rechercher une chaîne" aria-label="Rechercher une chaîne">
+      <button id="favOnly" class="wide" aria-pressed="false">Mes favoris</button>
+    </div>
+    <ul id="list"></ul>
+    <button id="more" class="more" hidden>Afficher plus de chaînes</button>
+  </section>
+</main>
+
+<footer>
+  Les chaînes viennent de la liste publique iptv-org. Certaines sont parfois hors ligne ou limitées à leur pays : si l’une ne démarre pas, essaie-en une autre.
+</footer>
+
+<script>
+const API = 'https://iptv-org.github.io/iptv/';
+const PAGE = 60;
+const PROXY = '/api/proxy?url='; // proxy Vercel (fichier api/proxy.js). Mettre '' pour le désactiver.
+let timer = null;
+const CATS = {general:'Généraliste',news:'Infos',sports:'Sport',entertainment:'Divertissement',movies:'Films',music:'Musique',kids:'Enfants',documentary:'Documentaires',culture:'Culture',religious:'Religion',education:'Éducation',lifestyle:'Style de vie'};
+const $ = s => document.querySelector(s);
+let all = [], shown = PAGE, hls = null, current = null, favOnly = false, hiddenHttp = 0;
+let favs = [];
+try { favs = JSON.parse(localStorage.getItem('tv-favs') || '[]'); } catch (e) {}
+const saveFavs = () => { try { localStorage.setItem('tv-favs', JSON.stringify(favs)); } catch (e) {} };
+
+function parse(text) {
+  const out = []; let meta = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const l = raw.trim();
+    if (l.startsWith('#EXTINF')) {
+      meta = {
+        name: l.slice(l.lastIndexOf(',') + 1).trim(),
+        logo: (l.match(/tvg-logo="([^"]*)"/) || [])[1] || '',
+        group: (l.match(/group-title="([^"]*)"/) || [])[1] || ''
+      };
+    } else if (meta && /^https?:\/\//.test(l)) {
+      meta.url = l; out.push(meta); meta = null;
+    }
+  }
+  return out;
+}
+
+async function load(path) {
+  $('#list').innerHTML = '<li class="note">Chargement des chaînes…</li>';
+  $('#more').hidden = true;
+  try {
+    const r = await fetch(API + path);
+    if (!r.ok) throw new Error('http ' + r.status);
+    let ch = parse(await r.text());
+    hiddenHttp = 0;
+    if (location.protocol === 'https:' && !PROXY) {
+      const n = ch.length;
+      ch = ch.filter(c => c.url.startsWith('https:'));
+      hiddenHttp = n - ch.length;
+    }
+    const seen = new Set();
+    all = ch.filter(c => c.name && !seen.has(c.url) && seen.add(c.url))
+            .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  } catch (e) {
+    all = [];
+    $('#list').innerHTML = '<li class="note">Impossible de charger la liste. Vérifie ta connexion internet, puis recharge la page.</li>';
+    return;
+  }
+  shown = PAGE;
+  render();
+}
+
+function render() {
+  const q = $('#q').value.trim().toLowerCase();
+  const rows = all.filter(c => (!q || c.name.toLowerCase().includes(q)) && (!favOnly || favs.includes(c.url)));
+  const list = $('#list');
+  list.innerHTML = '';
+  if (!rows.length) {
+    const li = document.createElement('li');
+    li.className = 'note';
+    li.textContent = favOnly ? 'Aucun favori pour le moment. Touche l’étoile à côté d’une chaîne pour l’ajouter.'
+      : 'Aucune chaîne trouvée. Change de pays, de catégorie ou de recherche.';
+    list.appendChild(li);
+    $('#more').hidden = true;
+    return;
+  }
+  for (const c of rows.slice(0, shown)) {
+    const li = document.createElement('li');
+    if (current && current.url === c.url) li.className = 'active';
+    const b = document.createElement('button');
+    b.className = 'ch';
+    let pic;
+    if (c.logo) {
+      pic = document.createElement('img');
+      pic.src = c.logo; pic.alt = ''; pic.loading = 'lazy';
+      pic.onerror = () => { const p = document.createElement('div'); p.className = 'ph'; p.textContent = c.name[0]; pic.replaceWith(p); };
+    } else {
+      pic = document.createElement('div'); pic.className = 'ph'; pic.textContent = c.name[0];
+    }
+    const t = document.createElement('span');
+    t.textContent = c.name;
+    if (c.group) { const s = document.createElement('small'); s.textContent = c.group.split(';')[0]; t.appendChild(s); }
+    b.append(pic, t);
+    b.onclick = () => { play(c); render(); if (innerWidth < 820) scrollTo({top: 0}); };
+    const f = document.createElement('button');
+    f.className = 'fav';
+    const on = favs.includes(c.url);
+    f.textContent = on ? '★' : '☆';
+    f.setAttribute('aria-pressed', on);
+    f.setAttribute('aria-label', (on ? 'Retirer des favoris : ' : 'Ajouter aux favoris : ') + c.name);
+    f.onclick = () => {
+      favs = on ? favs.filter(u => u !== c.url) : [...favs, c.url];
+      saveFavs(); render();
+    };
+    li.append(b, f);
+    list.appendChild(li);
+  }
+  $('#more').hidden = rows.length <= shown;
+  if (hiddenHttp && !favOnly && !q) {
+    const li = document.createElement('li');
+    li.className = 'note';
+    li.textContent = hiddenHttp + ' chaîne(s) non sécurisée(s) masquée(s) : le navigateur ne peut pas les lire sur un site en https.';
+    list.appendChild(li);
+  }
+}
+
+function play(c, viaProxy) {
+  current = c;
+  const v = $('#v'), st = $('#status');
+  const mixed = location.protocol === 'https:' && c.url.startsWith('http:');
+  if (mixed && PROXY) viaProxy = true;
+  $('#stage').classList.add('on');
+  $('#title').textContent = c.name;
+  st.className = ''; st.textContent = viaProxy ? 'Connexion (via le serveur)…' : 'Connexion…';
+  if (hls) { hls.destroy(); hls = null; }
+  clearTimeout(timer);
+  let done = false;
+  const fail = () => {
+    if (done) return; done = true; clearTimeout(timer);
+    if (hls) { hls.destroy(); hls = null; }
+    if (!viaProxy && PROXY) return play(c, true);
+    st.className = '';
+    st.textContent = 'Cette chaîne ne répond pas (hors ligne ou bloquée dans ta région). Essaie-en une autre.';
+  };
+  v.onplaying = () => { done = true; clearTimeout(timer); st.className = 'live'; st.textContent = '● En direct'; };
+  v.onerror = null;
+  timer = setTimeout(fail, 15000);
+  if (window.Hls && Hls.isSupported()) {
+    const cfg = { enableWorker: true };
+    if (viaProxy) cfg.xhrSetup = (xhr, url) => { xhr.open('GET', PROXY + encodeURIComponent(url), true); };
+    hls = new Hls(cfg);
+    hls.loadSource(c.url);
+    hls.attachMedia(v);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => v.play().catch(() => {}));
+    hls.on(Hls.Events.ERROR, (e, d) => { if (d.fatal) fail(); });
+  } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
+    v.src = c.url; v.onerror = fail; v.play().catch(() => {});
+  } else { fail(); }
+}
+
+async function init() {
+  const cs = $('#country'), ct = $('#cat');
+  cs.innerHTML = '<option value="">Pays…</option><option value="__all">Monde entier (très long)</option>';
+  ct.innerHTML = '<option value="">Catégorie…</option>' +
+    Object.entries(CATS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  try {
+    const r = await fetch('https://iptv-org.github.io/api/countries.json');
+    const data = (await r.json()).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    for (const c of data) {
+      const o = document.createElement('option');
+      o.value = c.code.toLowerCase();
+      o.textContent = (c.flag || '') + ' ' + c.name;
+      cs.appendChild(o);
+    }
+  } catch (e) {
+    for (const [code, name] of [['sn','Sénégal'],['fr','France'],['ci','Côte d’Ivoire'],['ma','Maroc'],['us','États-Unis'],['gb','Royaume-Uni']]) {
+      const o = document.createElement('option'); o.value = code; o.textContent = name; cs.appendChild(o);
+    }
+  }
+  cs.value = 'sn';
+  if (cs.value !== 'sn') cs.value = 'fr';
+  cs.onchange = () => { ct.value = ''; go(); };
+  ct.onchange = () => { cs.value = ''; go(); };
+  $('#q').oninput = () => { shown = PAGE; render(); };
+  $('#favOnly').onclick = e => {
+    favOnly = !favOnly; e.target.setAttribute('aria-pressed', favOnly); shown = PAGE; render();
+  };
+  $('#more').onclick = () => { shown += PAGE; render(); };
+  go();
+}
+
+function go() {
+  const cs = $('#country').value, ct = $('#cat').value;
+  const path = ct ? `categories/${ct}.m3u` : cs === '__all' ? 'index.m3u' : cs ? `countries/${cs}.m3u` : 'index.m3u';
+  load(path);
+}
+init();
+</script>
+</body>
+</html>
